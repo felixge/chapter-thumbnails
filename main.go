@@ -12,8 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"golang.org/x/sync/errgroup"
 )
 
 func usage() {
@@ -48,15 +46,14 @@ func run() error {
 	if err := os.MkdirAll(outDir, 0755); err != nil {
 		return err
 	}
-	var eg errgroup.Group
+	var thumbnails []Thumbnail
 	for _, c := range chapters {
-		c := c
-		eg.Go(func() error {
-			thumbPath := filepath.Join(outDir, fmt.Sprintf("%s.%s", c.Title, *formatF))
-			return CreateThumbnail(videoPath, thumbPath, c.Start)
+		thumbnails = append(thumbnails, Thumbnail{
+			Path:   filepath.Join(outDir, fmt.Sprintf("%s.%s", c.Title, *formatF)),
+			Offset: c.Start,
 		})
 	}
-	return eg.Wait()
+	return ExtractThumbnails(videoPath, thumbnails)
 }
 
 func VideoChapters(videoPath string) ([]*Chapter, error) {
@@ -81,17 +78,27 @@ func VideoChapters(videoPath string) ([]*Chapter, error) {
 	return ParseChapters(tmpFile)
 }
 
-func CreateThumbnail(videoPath, thumbPath string, offset time.Duration) error {
-	buf := &bytes.Buffer{}
+type Thumbnail struct {
+	Path   string
+	Offset time.Duration
+}
 
-	cmd := exec.Command(
-		"ffmpeg",
+func ExtractThumbnails(videoPath string, thumbnails []Thumbnail) error {
+	args := []string{
 		"-i", videoPath,
 		"-y",
-		"-ss", fmt.Sprintf("%f", offset.Seconds()),
-		"-frames:v", "1",
-		thumbPath,
-	)
+	}
+	for _, t := range thumbnails {
+		args = append(
+			args,
+			"-ss", fmt.Sprintf("%f", t.Offset.Seconds()),
+			"-frames:v", "1",
+			t.Path,
+		)
+	}
+
+	buf := &bytes.Buffer{}
+	cmd := exec.Command("ffmpeg", args...)
 	cmd.Stdout = buf
 	cmd.Stderr = buf
 	if err := cmd.Run(); err != nil {
