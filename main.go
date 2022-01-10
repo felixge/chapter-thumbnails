@@ -86,9 +86,9 @@ func CreateThumbnail(videoPath, thumbPath string, offset time.Duration) error {
 
 	cmd := exec.Command(
 		"ffmpeg",
+		"-ss", fmt.Sprintf("%f", offset.Seconds()),
 		"-i", videoPath,
 		"-y",
-		"-ss", fmt.Sprintf("%f", offset.Seconds()),
 		"-frames:v", "1",
 		thumbPath,
 	)
